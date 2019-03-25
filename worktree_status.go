@@ -159,11 +159,15 @@ func (w *Worktree) getIgnorePatterns() (patterns []gitignore.Pattern, err error)
 
 func (w *Worktree) excludeIgnoredChanges(changes merkletrie.Changes) merkletrie.Changes {
 	patterns, err := gitignore.ReadPatterns(w.Filesystem, nil)
-	if err != nil || len(patterns) == 0 {
+	if err != nil {
 		return changes
 	}
 
 	patterns = append(patterns, w.Excludes...)
+
+	if len(patterns) == 0 {
+		return changes
+	}
 
 	m := gitignore.NewMatcher(patterns)
 
