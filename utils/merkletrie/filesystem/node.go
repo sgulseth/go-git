@@ -4,12 +4,16 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
+	"strings"
+
+	"gopkg.in/src-d/go-git.v4/plumbing/format/gitignore"
 
 	"gopkg.in/src-d/go-git.v4/plumbing"
 	"gopkg.in/src-d/go-git.v4/plumbing/filemode"
 	"gopkg.in/src-d/go-git.v4/utils/merkletrie/noder"
 
-	"gopkg.in/src-d/go-billy.v4"
+	billy "gopkg.in/src-d/go-billy.v4"
 )
 
 var ignore = map[string]bool{
@@ -22,8 +26,9 @@ var ignore = map[string]bool{
 // This implementation implements a "standard" hash method being able to be
 // compared with any other noder.Noder implementation inside of go-git.
 type node struct {
-	fs         billy.Filesystem
-	submodules map[string]plumbing.Hash
+	fs            billy.Filesystem
+	submodules    map[string]plumbing.Hash
+	ignorePattern []gitignore.Pattern
 
 	path     string
 	hash     []byte
@@ -39,8 +44,9 @@ type node struct {
 func NewRootNode(
 	fs billy.Filesystem,
 	submodules map[string]plumbing.Hash,
+	ignorePattern []gitignore.Pattern,
 ) noder.Noder {
-	return &node{fs: fs, submodules: submodules, isDir: true}
+	return &node{fs: fs, submodules: submodules, ignorePattern: ignorePattern, isDir: true}
 }
 
 // Hash the hash of a filesystem is the result of concatenating the computed
@@ -95,8 +101,19 @@ func (n *node) calculateChildren() error {
 		return nil
 	}
 
+	matcher := gitignore.NewMatcher(n.ignorePattern)
+	if matcher.Match(strings.Split(n.path, string(os.PathSeparator)), n.IsDir()) {
+		return nil
+	}
+
 	for _, file := range files {
 		if _, ok := ignore[file.Name()]; ok {
+			continue
+		}
+
+		path := strings.Split(filepath.Join(n.path, file.Name()), string(os.PathSeparator))
+
+		if matcher.Match(path, n.IsDir()) {
 			continue
 		}
 
@@ -107,7 +124,6 @@ func (n *node) calculateChildren() error {
 
 		n.children = append(n.children, c)
 	}
-
 	return nil
 }
 
@@ -120,8 +136,9 @@ func (n *node) newChildNode(file os.FileInfo) (*node, error) {
 	}
 
 	node := &node{
-		fs:         n.fs,
-		submodules: n.submodules,
+		fs:            n.fs,
+		submodules:    n.submodules,
+		ignorePattern: n.ignorePattern,
 
 		path:  path,
 		hash:  hash,

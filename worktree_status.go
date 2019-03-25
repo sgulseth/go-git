@@ -124,7 +124,12 @@ func (w *Worktree) diffStagingWithWorktree(reverse bool) (merkletrie.Changes, er
 		return nil, err
 	}
 
-	to := filesystem.NewRootNode(w.Filesystem, submodules)
+	ignorePatterns, err := w.getIgnorePatterns()
+	if err != nil {
+		return nil, err
+	}
+
+	to := filesystem.NewRootNode(w.Filesystem, submodules, ignorePatterns)
 
 	var c merkletrie.Changes
 	if reverse {
@@ -137,7 +142,19 @@ func (w *Worktree) diffStagingWithWorktree(reverse bool) (merkletrie.Changes, er
 		return nil, err
 	}
 
-	return w.excludeIgnoredChanges(c), nil
+	return c, nil
+	// return w.excludeIgnoredChanges(c), nil
+}
+
+func (w *Worktree) getIgnorePatterns() (patterns []gitignore.Pattern, err error) {
+	patterns, err = gitignore.ReadPatterns(w.Filesystem, nil)
+	if err != nil || len(patterns) == 0 {
+		return patterns, err
+	}
+
+	patterns = append(patterns, w.Excludes...)
+
+	return patterns, err
 }
 
 func (w *Worktree) excludeIgnoredChanges(changes merkletrie.Changes) merkletrie.Changes {
