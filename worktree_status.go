@@ -142,8 +142,7 @@ func (w *Worktree) diffStagingWithWorktree(reverse bool) (merkletrie.Changes, er
 		return nil, err
 	}
 
-	return c, nil
-	// return w.excludeIgnoredChanges(c), nil
+	return w.excludeIgnoredChanges(c), nil
 }
 
 func (w *Worktree) getIgnorePatterns() (patterns []gitignore.Pattern, err error) {
